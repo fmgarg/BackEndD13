@@ -133,28 +133,6 @@ const randomsRouter = require ('./routes/randomsRouter')
 const productos = require ('./routes/productosRouter') ['productos']
 //console.log(eventos)
 
-
-//----------------------APP---------------------------------//
-
-if (MODO === 'CLUSTER' && cluster.isPrimary) {
-            console.log(`num CPUs es: ${numCPUs}`)
-            console.log(`PID MASTER ${process.pid}`)
-
-            for (let i = 0; i< numCPUs; i++){
-                cluster.fork()
-            }
-            cluster.on('exit', (worker)=>{
-                console.log(
-                  'Worker',
-                  worker.process.pid,
-                  'died',
-                  new Date().toLocaleString()
-                )
-                cluster.fork()
-            })
-
-} else {
-
 //---------------------------------SOCKETS-----------------------//
 const fs = require('fs');
 const { response } = require('express')
@@ -201,6 +179,30 @@ io.on('connection', (socket) => {
       )
 
 })
+
+
+
+//----------------------APP---------------------------------//
+
+if (MODO === 'CLUSTER' && cluster.isPrimary) {
+            console.log(`num CPUs es: ${numCPUs}`)
+            console.log(`PID MASTER ${process.pid}`)
+
+            for (let i = 0; i< numCPUs; i++){
+                cluster.fork()
+            }
+            cluster.on('exit', (worker, code, signal)=>{
+                console.log(`
+                  Worker
+                  ${worker.process.pid}
+                  died
+                  ${new Date().toLocaleString()}`
+                )
+                cluster.fork()
+            })
+
+} else {
+
 
 
   
