@@ -1,14 +1,9 @@
-# Desafío "Usando el objeto PROCESS". 
+# Desafío "SERVIDOR CON BALANCE DE CARGAS". 
 
 Este proyecto se encuentra realizado utilizando JS, NodeJS, express, express-handlebars, express-session, passport-local, sockets.io y bootstrap, entre otras.
 
-Al ingresar a la ruta localhost:8080/login te vas a encontrar con el formulario de login y la opción de registrarte.
-Al ingresar se accede a la ruta '/home' donde se encuentran las vistas del socket de  productos y mensajes. 
-Se puede ver el nombre del user en el margen superior de la pagina junto a un boton de logout. Desde ahí se pueden agregar productos y mensajes en el chat.
+Utilizando el modulo cluster se intenta balancear la carga del server creando tantos workers como CPUs tenga el servidor donde se ejecuta node.
 
-Si se agota la sesión la página se recarga (usando window.location.reload del lado del front) y vuelve al login.
-
-Si el user hace un logout es redirigido a la ruta del login.
 
 ## Consideraciones generales
 

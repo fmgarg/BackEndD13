@@ -7,6 +7,10 @@ const app = express()
 const httpServer = new HttpServer(app)
 const io = new IOServer(httpServer)
 
+const handlebars = require('express-handlebars')
+const { INSPECT_MAX_BYTES } = require('buffer')
+const { timeStamp } = require('console')
+
 const cookieParser = require('cookie-parser')
 const session = require('express-session')
 const connectMongo = require ('connect-mongo')
@@ -19,10 +23,11 @@ const parseArgs = require ('minimist')
 const args = parseArgs(process.argv)
 require('dotenv').config()
 
+const cluster = require('cluster')
+const numCPUs = require('os').cpus().length
+console.log(`El numero de CPUs es:  ${numCPUs}`)
 
-app.use(express.static('./public'))
-
-const options = {default: {puerto: 8080}}
+const options = {default: {puerto: 8080, modo:'FORK'}}
 
 //console.log(parseArgs(['-p', '5000'], options))
 //console.log(parseArgs(process.argv.slice(2), options))
@@ -33,7 +38,9 @@ console.log(parametros)
 
 const port = parametros['puerto']
 
-httpServer.listen(port, () =>{ getAll(); console.log(`servidor levantado puerto:${port}`)})
+const MODO = parametros['modo']
+
+//uso minimist el comando es: node server --puerto NUMERO --modo NOMBRE
 
 //-------BDD-ECOMMERCE--MONGO--ATLAS------------------
 
@@ -76,16 +83,46 @@ async function CRUD() {
   }
  }
 
-//-----------FIN BDD MONGOOSE-----------------
+//-----------FIN BDD MONGOOSE-----------------//
 
-/*
-//metodo para enviar y recibir peticiones json
-const router = express.Router()
-*/
+//---------------------------------SQLite3----------------------------------------//
 
-//usar app delante de use hace que sea general y que toda la app pueda procesar JSON y siempre debe ir antes del router con la peticion**
-app.use(express.urlencoded({ extended: true}))
-app.use(express.json())
+const {optionsMSG} = require ('./optionsMSG/sqLite3') 
+const { MemoryStore } = require('express-session')
+const { isNullOrUndefined } = require('util')
+const { CONNREFUSED } = require('dns')
+//const { createHash } = require('crypto')
+const knexMSG = require ('knex') (optionsMSG);
+
+//----------------esta funcion crea la tabla de mensajes sqLite3------------------
+
+const crearTabla = () =>{ 
+  const { createTableMSG } = require('./optionsMSG/createTableMSG')
+}
+
+//crearTabla ()
+
+
+//--------esta funcion devuelve todos los mensajes de la tabla mensajes-----------
+
+async function getAll (){ 
+  
+  await knexMSG
+    .from('MSG')
+    .select('*')
+    .then((rows) => {                
+            messages = rows.map(mensaje => {return mensaje})            
+            return messages
+            })
+    .catch((err) => {
+      console.log(err)
+    })
+    .finally(() => {
+      knexMSG.destroy()
+    })
+
+}
+
 
 //-------importando el modulo Router---------------
 const productosRouter = require ('./routes/productosRouter')
@@ -97,22 +134,26 @@ const productos = require ('./routes/productosRouter') ['productos']
 //console.log(eventos)
 
 
-//------------------------------HANDLEBARS-----------------------//
-const handlebars = require('express-handlebars')
-const { INSPECT_MAX_BYTES } = require('buffer')
-const { timeStamp } = require('console')
+//----------------------APP---------------------------------//
 
-app.engine(
-    '.hbs',
-    handlebars.engine({
-              extname: '.hbs',
-              defaultLayout: 'main.hbs',
-              layoutsDir: './views/layouts'
-    })
-  )
-  
-app.set('view engine', '.hbs')
-app.set('views', './views')
+if (MODO === 'CLUSTER' && cluster.isPrimary) {
+            console.log(`num CPUs es: ${numCPUs}`)
+            console.log(`PID MASTER ${process.pid}`)
+
+            for (let i = 0; i< numCPUs; i++){
+                cluster.fork()
+            }
+            cluster.on('exit', (worker)=>{
+                console.log(
+                  'Worker',
+                  worker.process.pid,
+                  'died',
+                  new Date().toLocaleString()
+                )
+                cluster.fork()
+            })
+
+} else {
 
 //---------------------------------SOCKETS-----------------------//
 const fs = require('fs');
@@ -161,43 +202,37 @@ io.on('connection', (socket) => {
 
 })
 
-//---------------------------------SQLite3----------------------------------------//
 
-const {optionsMSG} = require ('./optionsMSG/sqLite3') 
-const { MemoryStore } = require('express-session')
-const { isNullOrUndefined } = require('util')
-const { CONNREFUSED } = require('dns')
-//const { createHash } = require('crypto')
-const knexMSG = require ('knex') (optionsMSG);
-
-//----------------esta funcion crea la tabla de mensajes sqLite3------------------
-
-const crearTabla = () =>{ 
-  const { createTableMSG } = require('./optionsMSG/createTableMSG')
-}
-
-//crearTabla ()
-
-
-//--------esta funcion devuelve todos los mensajes de la tabla mensajes-----------
-
-async function getAll (){ 
   
-  await knexMSG
-    .from('MSG')
-    .select('*')
-    .then((rows) => {                
-            messages = rows.map(mensaje => {return mensaje})            
-            return messages
-            })
-    .catch((err) => {
-      console.log(err)
-    })
-    .finally(() => {
-      knexMSG.destroy()
-    })
+httpServer.listen(port, () =>{ getAll(); console.log(`servidor levantado puerto:${port}`)})
 
-}
+
+  /*
+//metodo para enviar y recibir peticiones json
+const router = express.Router()
+*/
+
+//usar app delante de use hace que sea general y que toda la app pueda procesar JSON y siempre debe ir antes del router con la peticion**
+app.use(express.urlencoded({ extended: true}))
+app.use(express.json())
+
+//se define la ruta de los archivos estaticos que seran servidos desde la ruta/public, IF nginx proxy desactivar!!
+app.use(express.static('./public'))
+
+//------------------------------HANDLEBARS-----------------------//
+
+app.engine(
+    '.hbs',
+    handlebars.engine({
+              extname: '.hbs',
+              defaultLayout: 'main.hbs',
+              layoutsDir: './views/layouts'
+    })
+  )
+  
+app.set('view engine', '.hbs')
+app.set('views', './views')
+
 
 //--------------------------LOGIN--CON---SESSION y PASSPORT---------------------------//
 app.use(cookieParser())
@@ -404,6 +439,7 @@ app.use('/info', async function (req, res, next){
       TotalUsagedRAM: process.memoryUsage(),
       PathDeEjecucion: process.cwd(),
       IDprocess: process.pid,
+      nCPUs: numCPUs,
     }
   }
   
@@ -413,3 +449,7 @@ app.use('/info', async function (req, res, next){
 )
 
 app.use('/randoms',randomsRouter)
+
+
+}
+
